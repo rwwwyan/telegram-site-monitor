@@ -75,7 +75,6 @@ def check_telegram():
             last_update_id = update["update_id"]
 
             message = update.get("message", {})
-
             text = message.get("text", "")
 
             chat_id = str(
@@ -86,7 +85,7 @@ def check_telegram():
 
                 send_telegram(
                     "✅ BOT FUNCIONANDO!\n\n"
-                    "Estou monitorando o site:\n"
+                    "Estou monitorando somente a aba LEEKS:\n"
                     f"{SITE_URL}\n\n"
                     "🔎 Verificação: a cada 60 segundos."
                 )
@@ -109,16 +108,31 @@ def get_rendered_page(browser):
             timeout=60000
         )
 
-        # Dá tempo para o JavaScript carregar
+        # Espera o JavaScript carregar os dados
         time.sleep(8)
 
-        # Pega somente o texto visível da página
-        text = page.locator("body").inner_text()
+        # Procura o título LEEKS
+        leeks = page.get_by_text(
+            "LEEKS",
+            exact=True
+        ).first
 
-        # Normaliza espaços e linhas
+        if leeks.count() == 0:
+            print("ERRO: seção LEEKS não encontrada.")
+            return ""
+
+        # Pega o elemento pai da seção LEEKS
+        parent = leeks.locator("..")
+
+        # Dá tempo para o conteúdo dinâmico carregar
+        time.sleep(2)
+
+        content = parent.inner_text()
+
+        # Normaliza o conteúdo
         lines = []
 
-        for line in text.splitlines():
+        for line in content.splitlines():
 
             line = " ".join(line.split())
 
@@ -127,9 +141,24 @@ def get_rendered_page(browser):
 
         content = "\n".join(lines)
 
+        print(
+            f"LEEKS capturado: "
+            f"{len(content)} caracteres"
+        )
+
         return content
 
+    except Exception as error:
+
+        print(
+            "Erro ao capturar LEEKS:",
+            error
+        )
+
+        return ""
+
     finally:
+
         page.close()
 
 
@@ -141,10 +170,11 @@ def get_content_hash(content):
 
 
 print("===================================")
-print(" CYBERLEEK SITE MONITOR")
+print(" CYBERLEEK LEEKS MONITOR")
 print("===================================")
 print(f"Site: {SITE_URL}")
 print(f"Intervalo: {CHECK_INTERVAL} segundos")
+print("Monitorando SOMENTE: LEEKS")
 print("")
 
 
@@ -159,32 +189,40 @@ with sync_playwright() as playwright:
 
     print("Navegador iniciado.")
 
-    # Teste do Telegram
+    # Teste automático do Telegram
     send_telegram(
         "🟢 MONITOR ONLINE!\n\n"
         f"Site monitorado:\n{SITE_URL}\n\n"
+        "📌 Área monitorada: LEEKS\n"
         "🌐 Navegador automático ativado.\n"
         "🔎 Verificação a cada 60 segundos."
     )
 
     try:
 
-        initial_content = get_rendered_page(browser)
-
-        previous_hash = get_content_hash(
-            initial_content
+        initial_content = get_rendered_page(
+            browser
         )
 
-        print("Estado inicial salvo.")
-        print(
-            f"Tamanho do conteúdo: "
-            f"{len(initial_content)} caracteres"
-        )
+        if initial_content:
+
+            previous_hash = get_content_hash(
+                initial_content
+            )
+
+            print("Estado inicial de LEEKS salvo.")
+
+        else:
+
+            print(
+                "Não foi possível obter "
+                "o conteúdo de LEEKS."
+            )
 
     except Exception as error:
 
         print(
-            "ERRO AO ABRIR SITE:",
+            "ERRO AO INICIAR MONITOR:",
             error
         )
 
@@ -196,37 +234,56 @@ with sync_playwright() as playwright:
         try:
 
             print("")
-            print("Verificando site...")
+            print("Verificando LEEKS...")
 
             current_content = get_rendered_page(
                 browser
             )
 
-            current_hash = get_content_hash(
-                current_content
-            )
+            if not current_content:
 
-            if current_hash != previous_hash:
-
-                print("🚨 ALTERAÇÃO DETECTADA!")
-
-                send_telegram(
-                    "🚨 ATUALIZAÇÃO DETECTADA!\n\n"
-                    f"Site:\n{SITE_URL}\n\n"
-                    "O conteúdo visível da página "
-                    "foi alterado."
+                print(
+                    "LEEKS vazio ou não encontrado."
                 )
-
-                previous_hash = current_hash
 
             else:
 
-                print("Nenhuma alteração.")
+                current_hash = get_content_hash(
+                    current_content
+                )
+
+                if previous_hash is None:
+
+                    previous_hash = current_hash
+
+                    print(
+                        "Estado inicial salvo."
+                    )
+
+                elif current_hash != previous_hash:
+
+                    print(
+                        "🚨 ALTERAÇÃO EM LEEKS DETECTADA!"
+                    )
+
+                    send_telegram(
+                        "🚨 ATUALIZAÇÃO EM LEEKS!\n\n"
+                        f"Site:\n{SITE_URL}\n\n"
+                        "📌 A seção LEEKS foi alterada."
+                    )
+
+                    previous_hash = current_hash
+
+                else:
+
+                    print(
+                        "Nenhuma alteração em LEEKS."
+                    )
 
         except Exception as error:
 
             print(
-                "Erro ao verificar site:",
+                "Erro ao verificar LEEKS:",
                 error
             )
 
