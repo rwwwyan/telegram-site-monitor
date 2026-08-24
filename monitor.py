@@ -1,41 +1,39 @@
 import hashlib
-import json
 import os
 import time
 
 import requests
 
 SITE_URL = "https://cyberleek.perma.online/"
-CHECK_INTERVAL = 60  # segundos
+CHECK_INTERVAL = 60
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-STATE_FILE = "site_state.json"
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+previous_hash = None
+last_update_id = 0
 
 
 def get_site_hash():
     response = requests.get(
         SITE_URL,
         timeout=30,
-        headers={
-            "User-Agent": "Mozilla/5.0 (SiteMonitor/1.0)"
-        }
+        headers={"User-Agent": "Mozilla/5.0"}
     )
+
     response.raise_for_status()
 
-    content = response.text.encode("utf-8")
-    return hashlib.sha256(content).hexdigest()
+    return hashlib.sha256(response.content).hexdigest()
 
 
 def send_telegram(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
     response = requests.post(
-        url,
+        f"{TELEGRAM_API}/sendMessage",
         data={
             "chat_id": CHAT_ID,
-            "text": message,
+            "text": message
         },
         timeout=30
     )
@@ -43,59 +41,78 @@ def send_telegram(message):
     response.raise_for_status()
 
 
-def load_previous_hash():
-    if not os.path.exists(STATE_FILE):
-        return None
+def check_telegram():
+    global last_update_id
 
-    with open(STATE_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        response = requests.get(
+            f"{TELEGRAM_API}/getUpdates",
+            params={
+                "offset": last_update_id + 1,
+                "timeout": 1
+            },
+            timeout=5
+        )
 
-    return data.get("hash")
+        response.raise_for_status()
 
+        updates = response.json().get("result", [])
 
-def save_hash(site_hash):
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump({"hash": site_hash}, f)
+        for update in updates:
+            last_update_id = update["update_id"]
 
+            message = update.get("message", {})
+            text = message.get("text", "")
+            chat_id = str(message.get("chat", {}).get("id", ""))
 
-def main():
-    print(f"Monitorando: {SITE_URL}")
-
-    previous_hash = load_previous_hash()
-
-send_telegram(
-    "✅ Bot conectado!\n\n"
-    "O monitoramento do site foi iniciado."
-)    
-    while True:
-        try:
-            current_hash = get_site_hash()
-
-            # Primeira execução: apenas salva o estado atual
-            if previous_hash is None:
-                save_hash(current_hash)
-                previous_hash = current_hash
-                print("Estado inicial salvo.")
-
-            elif current_hash != previous_hash:
-                print("ALTERAÇÃO DETECTADA!")
-
+            if text == "/start" and chat_id == str(CHAT_ID):
                 send_telegram(
-                    "🚨 ATUALIZAÇÃO DETECTADA!\n\n"
-                    f"O site foi alterado:\n{SITE_URL}"
+                    "✅ Bot funcionando!\n\n"
+                    "Estou monitorando o site:\n"
+                    f"{SITE_URL}\n\n"
+                    "🔎 Verificação: a cada 60 segundos."
                 )
 
-                save_hash(current_hash)
-                previous_hash = current_hash
-
-            else:
-                print("Nenhuma alteração.")
-
-        except Exception as e:
-            print(f"Erro: {e}")
-
-        time.sleep(CHECK_INTERVAL)
+    except Exception as error:
+        print("Erro Telegram:", error)
 
 
-if __name__ == "__main__":
-    main()
+print(f"Monitorando: {SITE_URL}")
+
+try:
+    previous_hash = get_site_hash()
+    print("Estado inicial salvo.")
+
+except Exception as error:
+    print("Erro ao acessar o site:", error)
+
+
+while True:
+
+    # Verifica comandos do Telegram
+    check_telegram()
+
+    # Verifica o site
+    try:
+        current_hash = get_site_hash()
+
+        if previous_hash is None:
+            previous_hash = current_hash
+
+        elif current_hash != previous_hash:
+            print("ALTERAÇÃO DETECTADA!")
+
+            send_telegram(
+                "🚨 ATUALIZAÇÃO DETECTADA!\n\n"
+                f"O site foi alterado:\n{SITE_URL}"
+            )
+
+            previous_hash = current_hash
+
+        else:
+            print("Nenhuma alteração.")
+
+    except Exception as error:
+        print("Erro ao verificar o site:", error)
+
+    time.sleep(CHECK_INTERVAL)
