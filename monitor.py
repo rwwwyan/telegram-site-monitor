@@ -16,21 +16,18 @@ previous_hash = None
 last_update_id = 0
 
 
-def get_site_hash():
-    response = requests.get(
-        SITE_URL,
-        timeout=30,
-        headers={"User-Agent": "Mozilla/5.0"}
+def telegram_request(method, **kwargs):
+    response = requests.post(
+        f"{TELEGRAM_API}/{method}",
+        **kwargs
     )
-
     response.raise_for_status()
-
-    return hashlib.sha256(response.content).hexdigest()
+    return response.json()
 
 
 def send_telegram(message):
-    response = requests.post(
-        f"{TELEGRAM_API}/sendMessage",
+    telegram_request(
+        "sendMessage",
         data={
             "chat_id": CHAT_ID,
             "text": message
@@ -38,7 +35,19 @@ def send_telegram(message):
         timeout=30
     )
 
-    response.raise_for_status()
+
+def remove_webhook():
+    try:
+        result = requests.get(
+            f"{TELEGRAM_API}/deleteWebhook",
+            params={"drop_pending_updates": False},
+            timeout=10
+        )
+
+        print("Telegram webhook:", result.text)
+
+    except Exception as error:
+        print("Erro ao remover webhook:", error)
 
 
 def check_telegram():
@@ -49,9 +58,9 @@ def check_telegram():
             f"{TELEGRAM_API}/getUpdates",
             params={
                 "offset": last_update_id + 1,
-                "timeout": 1
+                "timeout": 2
             },
-            timeout=5
+            timeout=10
         )
 
         response.raise_for_status()
@@ -63,21 +72,60 @@ def check_telegram():
 
             message = update.get("message", {})
             text = message.get("text", "")
-            chat_id = str(message.get("chat", {}).get("id", ""))
+            chat_id = str(
+                message.get("chat", {}).get("id", "")
+            )
+
+            print(
+                f"Mensagem recebida: {text} "
+                f"do chat {chat_id}"
+            )
 
             if text == "/start" and chat_id == str(CHAT_ID):
                 send_telegram(
-                    "✅ Bot funcionando!\n\n"
-                    "Estou monitorando o site:\n"
+                    "✅ BOT FUNCIONANDO!\n\n"
+                    "Estou monitorando:\n"
                     f"{SITE_URL}\n\n"
-                    "🔎 Verificação: a cada 60 segundos."
+                    "🔎 Verificação a cada 60 segundos."
                 )
 
     except Exception as error:
         print("Erro Telegram:", error)
 
 
+def get_site_hash():
+    response = requests.get(
+        SITE_URL,
+        timeout=30,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        }
+    )
+
+    response.raise_for_status()
+
+    return hashlib.sha256(
+        response.content
+    ).hexdigest()
+
+
+# Remove qualquer webhook antigo
+remove_webhook()
+
+# Teste automático do Telegram
+try:
+    send_telegram(
+        "🟢 MONITOR ONLINE!\n\n"
+        f"Site monitorado:\n{SITE_URL}"
+    )
+    print("Mensagem de teste enviada para o Telegram.")
+
+except Exception as error:
+    print("ERRO AO ENVIAR TESTE PARA TELEGRAM:", error)
+
+
 print(f"Monitorando: {SITE_URL}")
+
 
 try:
     previous_hash = get_site_hash()
@@ -89,17 +137,13 @@ except Exception as error:
 
 while True:
 
-    # Verifica comandos do Telegram
     check_telegram()
 
-    # Verifica o site
     try:
         current_hash = get_site_hash()
 
-        if previous_hash is None:
-            previous_hash = current_hash
+        if current_hash != previous_hash:
 
-        elif current_hash != previous_hash:
             print("ALTERAÇÃO DETECTADA!")
 
             send_telegram(
