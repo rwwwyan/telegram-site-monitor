@@ -63,6 +63,13 @@ def main():
 
     previous_hash = load_previous_hash()
 
+send_telegram(
+    "✅ Bot conectado!\n\n"
+    "O monitoramento do site foi iniciado."
+)
+
+while True:
+    
     while True:
         try:
             current_hash = get_site_hash()
