@@ -66,10 +66,7 @@ def main():
 send_telegram(
     "✅ Bot conectado!\n\n"
     "O monitoramento do site foi iniciado."
-)
-
-while True:
-    
+)    
     while True:
         try:
             current_hash = get_site_hash()
